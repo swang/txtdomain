@@ -1,10 +1,10 @@
+'use strict';
+
 var express = require('express')
   , request = require('request')
   , twilio = require('twilio')
-  , util = require('util')
   , app = express()
   , port
-  , TwimlResponse
 
 app.get('/', function(req, res) {
 
@@ -28,14 +28,11 @@ app.get('/', function(req, res) {
       var info = JSON.parse(body)
         , output
 
-      if (err) {
-        output = "Unable to look up domain(s): " + lookupDomain
-      }
-      else if (response.statusCode == 200) {
-        output = "The domain " + info.domain + " is " + (info.availability !== "taken" ? "" : "not ") + "available"
+      if (err || Number(response.statusCode) !== 200) {
+        output = "Unable to look up domain: " + lookupDomain
       }
       else {
-        output = "Unable to get information about: " + lookupDomain
+        output = "The domain " + info.domain + " is " + (info.availability !== "taken" ? "" : "not ") + "available"
       }
       res.send(200, TwimlResponse.message(output).toString())
     })
