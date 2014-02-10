@@ -1,23 +1,17 @@
 var express = require('express')
-  , Twilio = require('twilio')
-  , Namecheap = require('namecheap')
+  , request = require('request')
+  , twilio = require('twilio')
+  , util = require('util')
   , app = express()
   , port
   , TwimlResponse
-  , namecheap = new Namecheap(process.env.NAMECHEAP_USER, process.env.NAMECHEAP_PASS, process.env.NAMECHEAP_CLIENTIP);
-
-if (!process.env.NAMECHEAP_USER || !process.env.NAMECHEAP_PASS || !process.env.NAMECHEAP_CLIENTIP) {
-  console.error("*** You need to set your Namecheap credentials ***")
-  console.error("To do so set NAMECHEAP_USER, NAMECHEAP_PASS, NAMECHEAP_CLIENTIP")
-  process.exit(1)
-}
 
 app.get('/', function(req, res) {
 
   var sendMessage = ((req.query && req.query.Body) ? req.query.Body.split(" ") : null)
     , lookupDomain
     , longStringReplies
-    , TwimlResponse = new Twilio.TwimlResponse()
+    , TwimlResponse = new twilio.TwimlResponse()
 
   res.header("content-type", "text/xml")
   if (sendMessage === null) {
@@ -27,26 +21,29 @@ app.get('/', function(req, res) {
     res.send(200, TwimlResponse.message("Please send 'dom <domain name>' to lookup <domain name> status").toString())
   }
   else {
-    lookupDomains = sendMessage.slice(1)
+    lookupDomain = sendMessage[1].toLowerCase().replace(/[^a-z0-9\.\-]+/,'')
     longStringReplies = ""
 
-    namecheap.domains.check(lookupDomains, function(err, resp) {
+    request.get("https://domai.nr/api/json/info?q=" + lookupDomain, function (err, response, body) {
+      var info = JSON.parse(body)
+        , output
+
       if (err) {
-        res.send(200, TwimlResponse.message("Unable to look up domain(s): " + lookupDomains.join(", ")).toString())
+        output = "Unable to look up domain(s): " + lookupDomain
+      }
+      else if (response.statusCode == 200) {
+        output = "The domain " + info.domain + " is " + (info.availability !== "taken" ? "" : "not ") + "available"
       }
       else {
-        resp.DomainCheckResult = Array.isArray(resp.DomainCheckResult) ? resp.DomainCheckResult : [resp.DomainCheckResult]
-        resp.DomainCheckResult.forEach(function(domain) {
-          TwimlResponse.message("The domain " + domain.Domain + " " + (domain.Available ? "is available" : "is not available"))
-        })
-        res.send(200, TwimlResponse.toString())
-
+        output = "Unable to get information about: " + lookupDomain
       }
-    });
+      res.send(200, TwimlResponse.message(output).toString())
+    })
   }
 });
 
 port = Number(process.env.PORT || 5000)
+app.enable('trust proxy')
 app.listen(port, function() {
   console.log("Listening on " + port);
 });
